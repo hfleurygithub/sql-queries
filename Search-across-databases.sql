@@ -4,6 +4,7 @@ Search across all ONLINE databases for:
 - Column names
 - Stored procedures/views by name and/or by definition
 
+SQL Server 2025 compatible.
 Set the parameters below and run.
 */
 
@@ -51,6 +52,7 @@ END
 
 DECLARE @db SYSNAME;
 DECLARE @sql NVARCHAR(MAX);
+DECLARE @dbLiteral NVARCHAR(300); -- escaped db name for string literal
 
 DECLARE db_cur CURSOR FAST_FORWARD FOR
 SELECT DatabaseName FROM #DbList ORDER BY DatabaseName;
@@ -61,6 +63,7 @@ FETCH NEXT FROM db_cur INTO @db;
 WHILE @@FETCH_STATUS = 0
 BEGIN
     SET @sql = N'';
+    SET @dbLiteral = REPLACE(@db, N'''', N''''''); -- escape quotes for literal
 
     /* ---- Tables by name ---- */
     IF @SearchTables = 1
@@ -68,7 +71,7 @@ BEGIN
         SET @sql = @sql + N'
 INSERT INTO #SearchResults (DatabaseName, SchemaName, ObjectName, ObjectType, ColumnName, MatchType)
 SELECT
-    DB_NAME() AS DatabaseName,
+    N''' + @dbLiteral + N''' AS DatabaseName,
     s.name    AS SchemaName,
     t.name    AS ObjectName,
     N''TABLE'' AS ObjectType,
@@ -86,7 +89,7 @@ WHERE t.name LIKE @pattern;
         SET @sql = @sql + N'
 INSERT INTO #SearchResults (DatabaseName, SchemaName, ObjectName, ObjectType, ColumnName, MatchType)
 SELECT
-    DB_NAME() AS DatabaseName,
+    N''' + @dbLiteral + N''' AS DatabaseName,
     s.name    AS SchemaName,
     t.name    AS ObjectName,
     N''TABLE'' AS ObjectType,
@@ -105,7 +108,7 @@ WHERE c.name LIKE @pattern;
         SET @sql = @sql + N'
 INSERT INTO #SearchResults (DatabaseName, SchemaName, ObjectName, ObjectType, ColumnName, MatchType)
 SELECT
-    DB_NAME() AS DatabaseName,
+    N''' + @dbLiteral + N''' AS DatabaseName,
     s.name    AS SchemaName,
     o.name    AS ObjectName,
     o.type_desc AS ObjectType,
@@ -124,7 +127,7 @@ WHERE o.type IN (''P'',''V'')      -- P=Stored Proc, V=View
         SET @sql = @sql + N'
 INSERT INTO #SearchResults (DatabaseName, SchemaName, ObjectName, ObjectType, ColumnName, MatchType)
 SELECT
-    DB_NAME() AS DatabaseName,
+    N''' + @dbLiteral + N''' AS DatabaseName,
     s.name    AS SchemaName,
     o.name    AS ObjectName,
     o.type_desc AS ObjectType,
@@ -140,12 +143,12 @@ WHERE o.type IN (''P'',''V'')
 
     IF @sql <> N''
     BEGIN
-        declare @pattern varchar(max) = N'%' + @Find + N'%'
-        
-        EXEC sp_executesql
-            @sql,
-            N'@pattern NVARCHAR(4000)',
-            @pattern;
+        DECLARE @pattern NVARCHAR(4000) = N'%' + @Find + N'%';
+
+        EXEC sys.sp_executesql
+            @stmt   = @sql,
+            @params = N'@pattern NVARCHAR(4000)',
+            @pattern = @pattern;
     END
 
     FETCH NEXT FROM db_cur INTO @db;
