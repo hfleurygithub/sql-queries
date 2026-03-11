@@ -559,6 +559,7 @@ INSERT INTO #ScriptOut (ScriptLine) VALUES (N'-- INDEXES');
       AND i.index_id > 0
       AND i.is_hypothetical = 0
       AND i.name IS NOT NULL
+      AND i.type_desc IN ('CLUSTERED', 'NONCLUSTERED')
       AND NOT EXISTS
       (
           SELECT 1
@@ -574,7 +575,6 @@ SELECT
     + CASE
         WHEN i.type_desc = 'CLUSTERED' THEN N'CLUSTERED '
         WHEN i.type_desc = 'NONCLUSTERED' THEN N'NONCLUSTERED '
-        WHEN i.type_desc = 'XML' THEN N'XML '
         ELSE N''
       END
     + N'INDEX ' + QUOTENAME(i.IndexName)
@@ -624,6 +624,21 @@ SELECT
       END
     + CASE WHEN i.has_filter = 1 THEN N' WHERE ' + i.filter_definition ELSE N'' END
     + CASE
+        WHEN i.type_desc IN ('CLUSTERED','NONCLUSTERED') THEN
+            N' WITH ('
+            + N'PAD_INDEX = ' + CASE WHEN i.is_padded = 1 THEN N'ON' ELSE N'OFF' END
+            + CASE 
+                WHEN i.fill_factor BETWEEN 1 AND 100
+                    THEN N', FILLFACTOR = ' + CAST(i.fill_factor AS NVARCHAR(10))
+                ELSE N''
+              END
+            + N', IGNORE_DUP_KEY = ' + CASE WHEN i.ignore_dup_key = 1 THEN N'ON' ELSE N'OFF' END
+            + N', ALLOW_ROW_LOCKS = ' + CASE WHEN i.allow_row_locks = 1 THEN N'ON' ELSE N'OFF' END
+            + N', ALLOW_PAGE_LOCKS = ' + CASE WHEN i.allow_page_locks = 1 THEN N'ON' ELSE N'OFF' END
+            + N')'
+        ELSE N''
+      END
+    + CASE
         WHEN ds.name IS NOT NULL AND ds.type = 'FG' THEN N' ON ' + QUOTENAME(ds.name)
         WHEN ps.name IS NOT NULL THEN
             N' ON ' + QUOTENAME(ps.name) + N'(' +
@@ -637,17 +652,6 @@ SELECT
                   AND ic2.index_id = i.index_id
                   AND ic2.partition_ordinal = 1
             ), N'')
-            + N')'
-        ELSE N''
-      END
-    + CASE
-        WHEN i.type_desc IN ('CLUSTERED','NONCLUSTERED') THEN
-            N' WITH ('
-            + N'PAD_INDEX = ' + CASE WHEN i.is_padded = 1 THEN N'ON' ELSE N'OFF' END
-            + N', FILLFACTOR = ' + CAST(i.fill_factor AS NVARCHAR(10))
-            + N', IGNORE_DUP_KEY = ' + CASE WHEN i.ignore_dup_key = 1 THEN N'ON' ELSE N'OFF' END
-            + N', ALLOW_ROW_LOCKS = ' + CASE WHEN i.allow_row_locks = 1 THEN N'ON' ELSE N'OFF' END
-            + N', ALLOW_PAGE_LOCKS = ' + CASE WHEN i.allow_page_locks = 1 THEN N'ON' ELSE N'OFF' END
             + N')'
         ELSE N''
       END
