@@ -37,6 +37,47 @@ INSERT INTO #ScriptOut (ScriptLine) VALUES (N'GO');
 INSERT INTO #ScriptOut (ScriptLine) VALUES (N'');
 
 ------------------------------------------------------------
+-- 2) Alias User-Defined Data Types
+------------------------------------------------------------
+
+SET NOCOUNT ON;
+
+DECLARE @CRLF nvarchar(2) = CHAR(13) + CHAR(10);
+
+SELECT N'-- USER-DEFINED ALIAS TYPES' + @CRLF + N'GO' AS ScriptLine
+UNION ALL
+SELECT
+    N'IF TYPE_ID(N''' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N''') IS NULL' + @CRLF +
+    N'    EXEC(''CREATE TYPE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N' FROM ' +
+    CASE
+        WHEN bt.name IN ('varchar','char','varbinary','binary')
+            THEN bt.name + N'(' + CASE WHEN t.max_length = -1 THEN N'MAX' ELSE CAST(t.max_length AS nvarchar(10)) END + N')'
+        WHEN bt.name IN ('nvarchar','nchar')
+            THEN bt.name + N'(' + CASE WHEN t.max_length = -1 THEN N'MAX' ELSE CAST(t.max_length / 2 AS nvarchar(10)) END + N')'
+        WHEN bt.name IN ('decimal','numeric')
+            THEN bt.name + N'(' + CAST(t.precision AS nvarchar(10)) + N',' + CAST(t.scale AS nvarchar(10)) + N')'
+        WHEN bt.name IN ('datetime2','time','datetimeoffset')
+            THEN bt.name + N'(' + CAST(t.scale AS nvarchar(10)) + N')'
+        ELSE bt.name
+    END +
+    CASE
+        WHEN t.collation_name IS NOT NULL AND bt.name IN ('varchar','char','nvarchar','nchar','text','ntext')
+            THEN N' COLLATE ' + t.collation_name
+        ELSE N''
+    END +
+    CASE WHEN t.is_nullable = 1 THEN N' NULL' ELSE N' NOT NULL' END +
+    N''');' + @CRLF + N'GO'
+FROM sys.types t
+JOIN sys.schemas s
+    ON s.schema_id = t.schema_id
+JOIN sys.types bt
+    ON bt.user_type_id = t.system_type_id
+   AND bt.user_type_id = bt.system_type_id
+WHERE t.is_user_defined = 1
+  AND t.is_table_type = 0
+  AND bt.name IS NOT NULL;
+
+------------------------------------------------------------
 -- 2) PARTITION FUNCTIONS
 ------------------------------------------------------------
 INSERT INTO #ScriptOut (ScriptLine) VALUES (N'-- PARTITION FUNCTIONS');
